@@ -1,0 +1,54 @@
+[
+  {
+    "id": "convex_hull_definition",
+    "query": "What is convex hull?",
+    "category": "concept",
+    "expected_status": "answerable"
+  },
+  {
+    "id": "descriptors_importance",
+    "query": "Why are descriptors important in machine learning for materials?",
+    "category": "concept",
+    "expected_status": "answerable"
+  },
+  {
+    "id": "batio3_structure_code",
+    "query": "how to construct a BaTiO3 structure?",
+    "category": "code",
+    "expected_status": "answerable"
+  },
+  {
+    "id": "pandas_materials_data",
+    "query": "How do I use pandas for materials data?",
+    "category": "code"
+  },
+  {
+    "id": "assignment_due_temporal",
+    "query": "When is assignment 1 due?",
+    "category": "time_sensitive",
+    "expected_status": "needs_time_context",
+    "expected_temporal_context": "AY2025/2026 Semester 2"
+  },
+  {
+    "id": "cafeteria_out_of_scope",
+    "query": "What is the cafeteria menu today?",
+    "category": "out_of_scope",
+    "expected_status": "out_of_scope"
+  },
+  {
+    "id": "convex_hull_followup",
+    "query": "Why is it useful?",
+    "category": "short_memory",
+    "short_memory": [
+      {
+        "role": "user",
+        "content": "What is convex hull?"
+      },
+      {
+        "role": "assistant",
+        "content": "A convex hull is used in the course thermodynamics content to identify stable phases and compare formation energies."
+      }
+    ],
+    "expected_status": "answerable"
+  }
+]

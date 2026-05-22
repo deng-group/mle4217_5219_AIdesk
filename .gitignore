@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated reports and local build outputs can be regenerated.
+web_app/__pycache__/
+
+# Keep the course book as a sibling repository, not inside this repo.
+MLE4217_5219_book/
+

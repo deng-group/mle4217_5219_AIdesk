@@ -1,0 +1,41 @@
+[
+  {
+    "id": "batio3_answerable",
+    "query": "how to construct a BaTiO3 structure?",
+    "expected_status": "answerable",
+    "expected_action": "generate_answer",
+    "expected_citation_terms": ["optimization/optimization.ipynb_5"]
+  },
+  {
+    "id": "assignment_temporal_context",
+    "query": "When is assignment 1 due?",
+    "expected_status": "needs_time_context",
+    "expected_action": "generate_answer",
+    "expected_temporal_context": "AY2025/2026 Semester 2",
+    "expected_citation_terms": ["calendar.md", "syllabus.md"]
+  },
+  {
+    "id": "out_of_scope_guardrail",
+    "query": "What is the cafeteria menu today?",
+    "expected_status": "out_of_scope",
+    "expected_action": "refuse_or_fallback"
+  },
+  {
+    "id": "short_memory_followup",
+    "query": "Why is it useful?",
+    "short_memory": [
+      {
+        "role": "user",
+        "content": "What is a convex hull?"
+      },
+      {
+        "role": "assistant",
+        "content": "A convex hull is used in the course thermodynamics content to identify stable phases and compare formation energies."
+      }
+    ],
+    "expected_status": "answerable",
+    "expected_action": "generate_answer",
+    "expected_citation_terms": ["high_throughput/thermodynamics.md"],
+    "expected_memory_persistence": "cleared_when_window_or_session_closes"
+  }
+]

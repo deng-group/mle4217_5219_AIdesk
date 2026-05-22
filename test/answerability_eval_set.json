@@ -1,0 +1,45 @@
+[
+  {
+    "id": "convex_hull_answerable",
+    "query": "What is convex hull?",
+    "expected_status": "answerable"
+  },
+  {
+    "id": "assignment_due_time_context",
+    "query": "When is assignment 1 due?",
+    "expected_status": "needs_time_context",
+    "expected_temporal_context": "AY2025/2026 Semester 2"
+  },
+  {
+    "id": "grading_time_context",
+    "query": "What is the grading breakdown?",
+    "expected_status": "needs_time_context",
+    "expected_temporal_context": "AY2025/2026 Semester 2"
+  },
+  {
+    "id": "materials_project_mace_multi_source",
+    "query": "How is Materials Project data related to MACE?",
+    "expected_status": "answerable",
+    "expected_multi_source": true
+  },
+  {
+    "id": "md_mc_answerable",
+    "query": "What is the difference between molecular dynamics and Monte Carlo?",
+    "expected_status": "answerable"
+  },
+  {
+    "id": "cafeteria_out_of_scope",
+    "query": "What is the cafeteria menu today?",
+    "expected_status": "out_of_scope"
+  },
+  {
+    "id": "weather_out_of_scope",
+    "query": "What is the weather today?",
+    "expected_status": "out_of_scope"
+  },
+  {
+    "id": "broad_models_clarification",
+    "query": "Tell me about models",
+    "expected_status": "needs_clarification"
+  }
+]

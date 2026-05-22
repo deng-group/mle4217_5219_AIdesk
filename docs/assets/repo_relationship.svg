@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="860" viewBox="0 0 1600 860">
+  <defs>
+    <style>
+      text { font-family: Arial, sans-serif; }
+      .title { font-size: 34px; font-weight: 700; fill: #0f172a; }
+      .repo-title { font-size: 27px; font-weight: 700; fill: #0f172a; }
+      .box-title { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .box-text { font-size: 16px; fill: #334155; }
+      .label { font-size: 16px; font-weight: 700; fill: #1e293b; }
+      .small { font-size: 14px; fill: #334155; }
+      .repo-left { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; }
+      .repo-right { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2.5; }
+      .box-left { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .box-right { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .payload { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.5; }
+      .line { fill: #334155; }
+      .muted { fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="860" fill="#ffffff"/>
+  <text x="60" y="62" class="title">Repository Relationship and API Communication</text>
+
+  <rect x="70" y="115" width="600" height="640" rx="20" class="repo-left"/>
+  <rect x="930" y="115" width="600" height="640" rx="20" class="repo-right"/>
+
+  <text x="110" y="165" class="repo-title">mle4275_job</text>
+  <text x="110" y="198" class="box-text">Backend repo</text>
+
+  <text x="970" y="165" class="repo-title">MLE4217_5219_book</text>
+  <text x="970" y="198" class="box-text">Course source and student site repo</text>
+
+  <!-- Left repo phases -->
+  <rect x="120" y="245" width="500" height="86" rx="12" class="box-left"/>
+  <text x="150" y="278" class="box-title">Phase A: Ingestion</text>
+  <text x="150" y="306" class="box-text">build chunks and knowledge graph</text>
+
+  <rect x="120" y="375" width="500" height="86" rx="12" class="box-left"/>
+  <text x="150" y="408" class="box-title">Phase D: API Endpoint</text>
+  <text x="150" y="436" class="box-text">receive widget requests at /api/answer</text>
+
+  <rect x="120" y="505" width="500" height="86" rx="12" class="box-left"/>
+  <text x="150" y="538" class="box-title">Phase B: Retrieval</text>
+  <text x="150" y="566" class="box-text">retrieve evidence and decide answerability</text>
+
+  <rect x="120" y="635" width="500" height="70" rx="12" class="box-left"/>
+  <text x="150" y="668" class="box-title">Phase C: Answer</text>
+  <text x="150" y="694" class="box-text">build prompt and return student-facing answer</text>
+
+  <!-- Right repo blocks -->
+  <rect x="980" y="245" width="500" height="86" rx="12" class="box-right"/>
+  <text x="1010" y="278" class="box-title">Course source</text>
+  <text x="1010" y="306" class="box-text">slides, pages, notebooks, syllabus, calendar</text>
+
+  <rect x="980" y="375" width="500" height="110" rx="12" class="box-right"/>
+  <text x="1010" y="408" class="box-title">Student site</text>
+  <text x="1010" y="436" class="box-text">built HTML pages with embedded chat widget</text>
+
+  <rect x="980" y="590" width="500" height="86" rx="12" class="box-right"/>
+  <text x="1010" y="623" class="box-title">Browser session</text>
+  <text x="1010" y="651" class="box-text">short memory for follow-up questions</text>
+
+  <!-- Phase A input: book -> job -->
+  <rect x="700" y="262" width="200" height="52" rx="10" class="payload"/>
+  <text x="724" y="285" class="label">course files</text>
+  <text x="724" y="305" class="small">input for chunks / graph</text>
+  <rect x="900" y="286" width="80" height="4" class="line"/>
+  <rect x="620" y="286" width="80" height="4" class="line"/>
+  <polygon points="620,288 638,278 638,298" class="line"/>
+
+  <!-- Request: student site -> API endpoint -->
+  <rect x="700" y="392" width="200" height="62" rx="10" class="payload"/>
+  <text x="722" y="418" class="label">POST /api/answer</text>
+  <text x="722" y="439" class="small">query + context + memory</text>
+  <rect x="900" y="421" width="80" height="4" class="line"/>
+  <rect x="620" y="421" width="80" height="4" class="line"/>
+  <polygon points="620,423 638,413 638,433" class="line"/>
+
+  <!-- Internal backend path: API -> Retrieval -> Answer -->
+  <rect x="368" y="461" width="4" height="44" class="line"/>
+  <polygon points="370,505 360,487 380,487" class="line"/>
+  <rect x="368" y="591" width="4" height="44" class="line"/>
+  <polygon points="370,635 360,617 380,617" class="line"/>
+
+  <!-- Response: Answer -> student site -->
+  <rect x="620" y="666" width="80" height="4" class="line"/>
+  <rect x="700" y="640" width="200" height="62" rx="10" class="payload"/>
+  <text x="728" y="666" class="label">JSON response</text>
+  <text x="728" y="687" class="small">answer + sources + status</text>
+  <rect x="900" y="666" width="80" height="4" class="line"/>
+  <rect x="980" y="430" width="4" height="240" class="line"/>
+  <polygon points="980,430 970,448 990,448" class="line"/>
+</svg>
