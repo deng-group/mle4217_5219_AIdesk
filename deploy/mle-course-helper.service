@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=mlehelper
+Group=mlehelper
 WorkingDirectory=/srv/mle-course-helper/backend
 EnvironmentFile=/etc/mle-course-helper.env
 ExecStart=/srv/mle-course-helper/backend/.venv/bin/gunicorn web_app.app:app --bind 127.0.0.1:5055 --workers 2 --threads 4 --timeout 180 --access-logfile -

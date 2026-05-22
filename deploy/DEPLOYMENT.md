@@ -23,6 +23,7 @@ sudo apt install -y git rsync nginx python3 python3-venv python3-pip
 Create directories:
 
 ```bash
+sudo useradd --system --home /srv/mle-course-helper --shell /usr/sbin/nologin mlehelper || true
 sudo mkdir -p /srv/mle-course-helper/backend /srv/mle-course-helper/book
 sudo chown -R "$USER":"$USER" /srv/mle-course-helper
 ```
@@ -60,6 +61,8 @@ On the server:
 ```bash
 cd /srv/mle-course-helper/backend
 bash deploy/install_backend.sh
+mkdir -p /srv/mle-course-helper/backend/.cache/huggingface
+sudo chown -R mlehelper:mlehelper /srv/mle-course-helper/backend/.cache
 ```
 
 The first run may take a while because `sentence-transformers` installs model
