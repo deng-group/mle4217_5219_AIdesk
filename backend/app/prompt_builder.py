@@ -25,6 +25,7 @@ If evidence is insufficient, ambiguous, outdated, or out of scope, say so clearl
 Do not invent citations, facts, deadlines, course policies, or code behavior.
 Do not show raw internal chunk IDs to students.
 Start each generated answer with a natural location sentence, for example: "You can find this in [Title] ([file_path])." If multiple sources are genuinely needed, mention at most the top 3 in that first sentence. Do not use report-style headings such as "Relevant Course Source(s)".
+Use readable Markdown formatting. Put the location sentence in its own first paragraph. After a blank line, answer procedural or workflow questions as a numbered list. For conceptual questions, use short paragraphs or bullets when that improves readability.
 Prefer concise, instructional answers that help students understand the concept.
 """
 
@@ -32,11 +33,11 @@ Prefer concise, instructional answers that help students understand the concept.
 STATUS_POLICIES = {
     "answerable": {
         "llm_action": "generate_answer",
-        "instruction": "Answer the question using only the provided evidence. Start with a natural location sentence such as: \"You can find this in [Title] ([file_path]).\" If multiple sources are genuinely needed, mention at most the top 3 sources in that first sentence. Do not use report-style headings. Do not show raw chunk IDs. Cite sources by title and file path only.",
+        "instruction": "Answer the question using only the provided evidence. Start with a natural location sentence such as: \"You can find this in [Title] ([file_path]).\" If multiple sources are genuinely needed, mention at most the top 3 sources in that first sentence. Put that location sentence in its own first paragraph, followed by a blank line. For procedural or workflow questions, answer with a concise numbered list. Do not use report-style headings. Do not show raw chunk IDs. Cite sources by title and file path only.",
     },
     "needs_time_context": {
         "llm_action": "generate_answer",
-        "instruction": "Answer using only the provided evidence and explicitly state the academic year/semester. Start with a natural location sentence such as: \"For AY2025/2026 Semester 2, you can find this in [Title] ([file_path]).\" If multiple sources are genuinely needed, mention at most the top 3 sources in that first sentence. Do not present offering-specific logistics as timeless. Do not use report-style headings. Do not show raw chunk IDs. Cite sources by title and file path only.",
+        "instruction": "Answer using only the provided evidence and explicitly state the academic year/semester. Start with a natural location sentence such as: \"For AY2025/2026 Semester 2, you can find this in [Title] ([file_path]).\" If multiple sources are genuinely needed, mention at most the top 3 sources in that first sentence. Put that location sentence in its own first paragraph, followed by a blank line. For procedural or workflow questions, answer with a concise numbered list. Do not present offering-specific logistics as timeless. Do not use report-style headings. Do not show raw chunk IDs. Cite sources by title and file path only.",
     },
     "needs_clarification": {
         "llm_action": "ask_clarification",

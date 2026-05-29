@@ -48,6 +48,8 @@ def public_sources(sources: list[dict]) -> list[dict]:
 def create_app() -> Flask:
     load_env_file(REPO_ROOT / ".env")
     app = Flask(__name__)
+    pipeline = QueryPipeline(top_k=5)
+    prompt_builder = PromptBuilder(evidence_score_threshold=0.60)
 
     @app.after_request
     def add_cors_headers(response):
@@ -93,8 +95,8 @@ def create_app() -> Flask:
 
         try:
             generator = AnswerGenerator(
-                pipeline=QueryPipeline(top_k=5),
-                prompt_builder=PromptBuilder(evidence_score_threshold=0.60),
+                pipeline=pipeline,
+                prompt_builder=prompt_builder,
                 provider=provider_from_name(provider, model=model),
             )
             result = generator.answer(query, short_memory=memory)

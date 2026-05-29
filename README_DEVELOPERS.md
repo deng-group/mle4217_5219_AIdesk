@@ -99,11 +99,12 @@ marked as **AY2025/2026 Semester 2**.
 6. Add API retry and fallback behavior for transient provider failures.
 7. Define answer length policy for definitions, code/workflow questions, review questions, weak evidence, and out-of-scope cases.
 8. Add recommended follow-up questions after answers.
+9. Add and confirm the expected answer for: `how to combine the static job and MD simulation job in atomate2`.
 
 ### Phase D: Book Widget
 
-9. Make source locations clickable so students can jump from an answer to the relevant book chapter or section.
+10. Make source locations clickable so students can jump from an answer to the relevant book chapter or section.
 
 ### Phase E: Deployment and Pilot
 
-10. Define deployment and pilot workflow for the static book site, backend API, URL configuration, feedback collection, and evaluation metrics.
+11. Define deployment and pilot workflow for the static book site, backend API, URL configuration, feedback collection, and evaluation metrics.
