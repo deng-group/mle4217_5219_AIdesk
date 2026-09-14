@@ -5,6 +5,7 @@ This deploys the course book and the RAG API on one Linux server:
 ```text
 https://YOUR_DOMAIN/            -> static book site
 https://YOUR_DOMAIN/api/answer  -> Flask/Gunicorn RAG API
+https://YOUR_DOMAIN/api/answer/stream -> streaming route used by the course widget
 ```
 
 The book widget keeps local testing on `http://127.0.0.1:5055`, but on a real

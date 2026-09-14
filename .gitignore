@@ -1,5 +1,6 @@
 .DS_Store
 .env
+scripts/api_env.sh
 .venv/
 __pycache__/
 *.py[cod]

@@ -125,7 +125,7 @@ Current providers:
 | `dry_run` | Default local provider. Does not call an LLM; returns a deterministic answer preview for testing routing, evidence, citations, temporal context, and memory packaging. |
 | `openai` | Optional OpenAI Responses API provider. Requires the `openai` Python package, `OPENAI_API_KEY`, and an explicit model through `--model` or `OPENAI_MODEL`. |
 | `gemini` | Optional Google Gemini REST provider. Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`; defaults to `gemini-2.5-flash`. |
-| `anthropic` | Optional Anthropic-compatible Messages API provider. Requires `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY`; defaults to `claude-sonnet-4-6` for the current matsci relay. |
+| `anthropic` | Optional Anthropic-compatible Messages API provider. Requires `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY`; `ANTHROPIC_BASE_URL` can select a compatible relay. |
 
 Run one dry-run answer package:
 
@@ -157,6 +157,14 @@ ANTHROPIC_BASE_URL=... ANTHROPIC_AUTH_TOKEN=... \
 python backend/scripts/answer.py "What is convex hull?" \
 --provider anthropic --model <supported-model>
 ```
+
+For a minimal local setup, copy `scripts/api_env.example.sh` to the ignored
+`scripts/api_env.sh`, edit the key/model there, and source it before starting
+the backend.
+
+The course widget uses `POST /api/answer/stream`, which returns newline-delimited
+`start`, `delta`, and `done` events. Streaming errors are returned directly; the
+route does not fall back to the buffered provider call.
 
 Memory policy:
 

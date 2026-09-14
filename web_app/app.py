@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -59,6 +60,7 @@ def create_app() -> Flask:
         return response
 
     @app.route("/api/answer", methods=["OPTIONS"])
+    @app.route("/api/answer/stream", methods=["OPTIONS"])
     def answer_options():
         return ("", 204)
 
@@ -128,6 +130,47 @@ def create_app() -> Flask:
                 "sources": public_sources(result["sources"]),
             }
         )
+
+    @app.post("/api/answer/stream")
+    def answer_stream():
+        payload = request.get_json(force=True) or {}
+        query = str(payload.get("query", "")).strip()
+        if not query:
+            return jsonify({"ok": False, "error": "Query is required."}), 400
+
+        provider = payload.get("provider") or default_provider()
+        model = payload.get("model") or default_model(provider) or None
+        memory = payload.get("short_memory") or []
+
+        def events():
+            try:
+                generator = AnswerGenerator(
+                    pipeline=pipeline,
+                    prompt_builder=prompt_builder,
+                    provider=provider_from_name(provider, model=model),
+                )
+                for event in generator.stream_answer(query, short_memory=memory):
+                    yield json.dumps(event, ensure_ascii=False) + "\n"
+            except Exception as exc:
+                yield json.dumps(
+                    {
+                        "type": "error",
+                        "ok": False,
+                        "error": type(exc).__name__,
+                        "message": str(exc),
+                        "provider": provider,
+                        "model": model,
+                    },
+                    ensure_ascii=False,
+                ) + "\n"
+
+        response = Response(
+            stream_with_context(events()),
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        response.headers["Cache-Control"] = "no-cache, no-transform"
+        response.headers["X-Accel-Buffering"] = "no"
+        return response
 
     return app
 

@@ -12,10 +12,12 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 from urllib import error, request
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,6 +68,9 @@ class DryRunProvider:
 
     name: str = "dry_run"
 
+    def resolved_model(self) -> None:
+        return None
+
     def generate(self, prompt_package: dict) -> dict:
         action = prompt_package["llm_action"]
         status = prompt_package["status"]
@@ -94,6 +99,11 @@ class DryRunProvider:
             "citations": citations,
             "raw_response": None,
         }
+
+    def stream(self, prompt_package: dict) -> Iterator[str]:
+        words = self.generate(prompt_package)["answer"].split(" ")
+        for index, word in enumerate(words):
+            yield word if index == 0 else f" {word}"
 
 
 @dataclass
@@ -209,6 +219,9 @@ class AnthropicProvider:
     model: str | None = None
     name: str = "anthropic"
 
+    def resolved_model(self) -> str:
+        return self.model or os.environ.get("ANTHROPIC_MODEL") or DEFAULT_ANTHROPIC_MODEL
+
     def generate(self, prompt_package: dict) -> dict:
         base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/")
         token = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")
@@ -229,23 +242,38 @@ class AnthropicProvider:
                 }
             ],
         }
-        req = request.Request(
-            f"{base_url}/v1/messages",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01",
-                "x-api-key": token,
-                "User-Agent": "mle4275-agent/0.1",
-            },
-            method="POST",
-        )
-        try:
-            with request.urlopen(req, timeout=90) as response:
-                raw = json.loads(response.read().decode("utf-8"))
-        except error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Anthropic API error {exc.code}: {body}") from exc
+        # Keep credentials and request content out of the process command line,
+        # where local process-inspection tools could otherwise reveal them.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=True) as config:
+            escaped_token = token.replace("\\", "\\\\").replace('"', '\\"')
+            config.write(f'url = "{base_url}/v1/messages"\n')
+            config.write('header = "content-type: application/json"\n')
+            config.write('header = "anthropic-version: 2023-06-01"\n')
+            config.write(f'header = "x-api-key: {escaped_token}"\n')
+            config.write('request = "POST"\n')
+            config.flush()
+            completed = subprocess.run(
+                [
+                    "curl",
+                    "-sS",
+                    "--fail-with-body",
+                    "--max-time",
+                    "90",
+                    "--config",
+                    config.name,
+                    "--data-binary",
+                    "@-",
+                ],
+                input=json.dumps(payload),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        if completed.returncode != 0:
+            body = (completed.stdout or completed.stderr).strip()
+            raise RuntimeError(f"Anthropic API error via curl: {body}")
+        raw = json.loads(completed.stdout)
 
         answer = self._extract_text(raw)
         return {
@@ -255,6 +283,89 @@ class AnthropicProvider:
             "citations": [item["chunk_id"] for item in prompt_package.get("evidence", [])],
             "raw_response": raw,
         }
+
+    def stream(self, prompt_package: dict) -> Iterator[str]:
+        """Yield text deltas from an Anthropic-compatible SSE response."""
+        base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/")
+        token = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")
+        if not token:
+            raise RuntimeError("Set ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY before using the Anthropic provider.")
+
+        messages = prompt_package["messages"]
+        payload = {
+            "model": self.resolved_model(),
+            "max_tokens": 2048,
+            "temperature": 0.2,
+            "stream": True,
+            "system": messages[0]["content"],
+            "messages": [{"role": "user", "content": messages[1]["content"]}],
+        }
+
+        process = None
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=True) as config:
+            escaped_token = token.replace("\\", "\\\\").replace('"', '\\"')
+            config.write(f'url = "{base_url}/v1/messages"\n')
+            config.write('header = "content-type: application/json"\n')
+            config.write('header = "anthropic-version: 2023-06-01"\n')
+            config.write(f'header = "x-api-key: {escaped_token}"\n')
+            config.write('request = "POST"\n')
+            config.flush()
+            process = subprocess.Popen(
+                [
+                    "curl",
+                    "-sS",
+                    "--no-buffer",
+                    "--fail-with-body",
+                    "--max-time",
+                    "120",
+                    "--config",
+                    config.name,
+                    "--data-binary",
+                    "@-",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+            assert process.stdin is not None
+            assert process.stdout is not None
+            process.stdin.write(json.dumps(payload))
+            process.stdin.close()
+            non_event_output = []
+            try:
+                for raw_line in process.stdout:
+                    line = raw_line.strip()
+                    if not line.startswith("data:"):
+                        if line and not line.startswith("event:"):
+                            non_event_output.append(line)
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    event_payload = json.loads(data)
+                    if event_payload.get("type") == "error":
+                        message = event_payload.get("error", {}).get("message", "Unknown streaming error")
+                        raise RuntimeError(f"Anthropic API error: {message}")
+                    if event_payload.get("type") != "content_block_delta":
+                        continue
+                    delta = event_payload.get("delta", {})
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        yield delta["text"]
+                return_code = process.wait()
+                if return_code != 0:
+                    assert process.stderr is not None
+                    body = " ".join(non_event_output) or process.stderr.read().strip()
+                    raise RuntimeError(f"Anthropic streaming API error via curl: {body}")
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
 
     @staticmethod
     def _extract_text(raw: dict) -> str:
@@ -281,10 +392,14 @@ class AnswerGenerator:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.provider = provider or DryRunProvider()
 
-    def answer(self, query: str, short_memory: list[dict] | None = None) -> dict:
+    def _prepare(self, query: str, short_memory: list[dict] | None = None) -> tuple[dict, dict]:
         memory = short_memory or []
         pipeline_result = self.pipeline.ask(query, short_memory=memory)
         prompt_package = self.prompt_builder.build(pipeline_result, short_memory=memory)
+        return pipeline_result, prompt_package
+
+    def answer(self, query: str, short_memory: list[dict] | None = None) -> dict:
+        pipeline_result, prompt_package = self._prepare(query, short_memory)
         provider_result = self.provider.generate(prompt_package)
         sources = self._student_sources(prompt_package["evidence"])
         answer = self._hide_internal_chunk_ids(provider_result["answer"], prompt_package["evidence"])
@@ -307,6 +422,52 @@ class AnswerGenerator:
             "raw_response": provider_result["raw_response"],
         }
 
+    def stream_answer(self, query: str, short_memory: list[dict] | None = None) -> Iterator[dict]:
+        stream = getattr(self.provider, "stream", None)
+        if not callable(stream):
+            raise RuntimeError(f"Provider `{self.provider.name}` does not support streaming in the web widget.")
+
+        pipeline_result, prompt_package = self._prepare(query, short_memory)
+        sources = self._student_sources(prompt_package["evidence"])
+        resolve_model = getattr(self.provider, "resolved_model", None)
+        model = resolve_model() if callable(resolve_model) else getattr(self.provider, "model", None)
+
+        yield {
+            "type": "start",
+            "ok": True,
+            "query": query,
+            "status": prompt_package["status"],
+            "llm_action": prompt_package["llm_action"],
+            "provider": self.provider.name,
+            "model": model,
+            "confidence": pipeline_result["confidence"],
+            "temporal_context": pipeline_result["temporal_context"],
+            "sources": self._public_sources(sources),
+        }
+
+        chunks = []
+        for delta in stream(prompt_package):
+            if not delta:
+                continue
+            chunks.append(delta)
+            yield {"type": "delta", "text": self._replace_chunk_ids(delta, prompt_package["evidence"])}
+
+        if not chunks:
+            raise RuntimeError("The model stream completed without returning answer text.")
+        answer = self._hide_internal_chunk_ids("".join(chunks), prompt_package["evidence"])
+        yield {
+            "type": "done",
+            "ok": True,
+            "answer": answer,
+            "status": prompt_package["status"],
+            "llm_action": prompt_package["llm_action"],
+            "provider": self.provider.name,
+            "model": model,
+            "confidence": pipeline_result["confidence"],
+            "temporal_context": pipeline_result["temporal_context"],
+            "sources": self._public_sources(sources),
+        }
+
     @staticmethod
     def _student_sources(evidence: list[dict]) -> list[dict]:
         sources = []
@@ -327,14 +488,30 @@ class AnswerGenerator:
         return sources
 
     @staticmethod
+    def _public_sources(sources: list[dict]) -> list[dict]:
+        return [
+            {
+                "title": source["title"],
+                "file_path": source["file_path"],
+                "score": source["score"],
+            }
+            for source in sources
+        ]
+
+    @staticmethod
     def _hide_internal_chunk_ids(answer: str, evidence: list[dict]) -> str:
+        cleaned = AnswerGenerator._replace_chunk_ids(answer, evidence)
+        cleaned = re.sub(r"\(\s*chunk_id\s*=\s*[^)]+\)", "", cleaned)
+        cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+        return cleaned.strip()
+
+    @staticmethod
+    def _replace_chunk_ids(answer: str, evidence: list[dict]) -> str:
         cleaned = answer
         for item in evidence:
             replacement = f"{item['title']} ({item['file_path']})"
             cleaned = cleaned.replace(item["chunk_id"], replacement)
-        cleaned = re.sub(r"\(\s*chunk_id\s*=\s*[^)]+\)", "", cleaned)
-        cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
-        return cleaned.strip()
+        return cleaned
 
 
 def provider_from_name(name: str, model: str | None = None) -> LLMProvider:
