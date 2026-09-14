@@ -16,10 +16,6 @@ user explicitly and unambiguously asks for a separate new page. Before any web
 task, inspect `../MLE4217_5219_book`, preserve its existing layout and content,
 and make only the changes needed to add, update, configure, or test its widget.
 
-用户约定：用户说“建立网页”“再做一个网页”“测试网页”或“分享网页”时，永远指
-现有的 `../MLE4217_5219_book` 网页仓库加上现有 widget；除非用户明确要求新建
-独立网页，否则不得在本后端仓库重新设计或创建替代网页。
-
 ## Phase Workflow and Tests
 
 ![Phase workflow and tests](docs/assets/phase_workflow_tests.png)
