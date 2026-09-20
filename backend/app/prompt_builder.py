@@ -67,7 +67,12 @@ class PromptBuilder:
         self.max_memory_turns = max_memory_turns
         self.evidence_score_threshold = evidence_score_threshold
 
-    def build(self, pipeline_result: dict, short_memory: list[dict] | None = None) -> dict:
+    def build(
+        self,
+        pipeline_result: dict,
+        short_memory: list[dict] | None = None,
+        selected_context: list[str] | None = None,
+    ) -> dict:
         status = pipeline_result["status"]
         policy = STATUS_POLICIES.get(status, STATUS_POLICIES["weak_evidence"])
         memory = self._trim_memory(short_memory or [])
@@ -85,6 +90,13 @@ class PromptBuilder:
 
         if memory:
             prompt_sections.append("Short memory from this open session:\n" + self._format_memory(memory))
+
+        context = [str(item).strip()[:160] for item in (selected_context or []) if str(item).strip()]
+        if context:
+            prompt_sections.append(
+                "Student-selected course graph context (use only to focus the question; it is not evidence):\n"
+                + "\n".join(f"- {item}" for item in context[:4])
+            )
 
         if policy["llm_action"] == "generate_answer":
             prompt_sections.append("Evidence:\n" + self._format_evidence(evidence))
@@ -107,6 +119,7 @@ class PromptBuilder:
                 "memory_persistence": "cleared_when_window_or_session_closes",
             },
             "short_memory": memory,
+            "selected_context": context[:4],
             "evidence": evidence,
             "messages": [
                 {"role": "system", "content": SYSTEM_INSTRUCTION.strip()},

@@ -42,8 +42,14 @@ class QueryPipeline:
         self.gate = AnswerabilityGate()
         self.top_k = top_k
 
-    def ask(self, query: str, top_k: int | None = None, short_memory: list[dict] | None = None) -> dict:
-        retrieval_query = self._contextual_query(query, short_memory or [])
+    def ask(
+        self,
+        query: str,
+        top_k: int | None = None,
+        short_memory: list[dict] | None = None,
+        context_terms: list[str] | None = None,
+    ) -> dict:
+        retrieval_query = self._contextual_query(query, short_memory or [], context_terms or [])
         results = self.retriever.search(retrieval_query, top_k=top_k or self.top_k)
         decision = self.gate.decide(query, results)
         return {
@@ -60,12 +66,13 @@ class QueryPipeline:
         }
 
     @staticmethod
-    def _contextual_query(query: str, short_memory: list[dict]) -> str:
-        """Use short memory for retrieval when the current query is referential."""
+    def _contextual_query(query: str, short_memory: list[dict], context_terms: list[str] | None = None) -> str:
+        """Use selected graph nodes and short memory to disambiguate retrieval."""
+        selected_context = [str(term).strip()[:160] for term in (context_terms or []) if str(term).strip()]
         lowered = query.lower()
         referential = any(token in lowered.split() for token in {"it", "this", "that", "they", "them"})
         if not referential or not short_memory:
-            return query
+            return " ".join(selected_context + [query]) if selected_context else query
 
         recent = []
         for item in short_memory[-4:]:
@@ -75,8 +82,8 @@ class QueryPipeline:
                 recent.append(content[:400])
 
         if not recent:
-            return query
-        return " ".join(recent + [query])
+            return " ".join(selected_context + [query]) if selected_context else query
+        return " ".join(selected_context + recent + [query])
 
     @staticmethod
     def _format_evidence(result: SearchResult) -> dict:
