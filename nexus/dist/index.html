@@ -39,6 +39,10 @@
             <button id="fit-view" class="icon-control" type="button" aria-label="Fit graph to screen" title="Fit graph">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"></path></svg>
             </button>
+            <button id="open-chat" class="chat-launcher" type="button" aria-controls="chat-panel" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v11H9l-4 3V5Z"></path><path d="M8 9h8M8 12h5"></path></svg>
+              <span>Ask AI</span>
+            </button>
           </div>
         </header>
 
@@ -64,9 +68,7 @@
             <button id="close-node-card" class="card-close" type="button" aria-label="Close concept details">×</button>
             <p id="node-kind" class="node-kind">Chapter</p>
             <h2 id="node-title">Structures</h2>
-            <p id="node-description">Crystal structures, symmetry, defects, interfaces, and representations.</p>
-            <div id="node-meta" class="node-meta"></div>
-            <button id="ask-node" class="ask-node" type="button">Ask a follow-up <span>→</span></button>
+            <button id="ask-node" class="ask-node" type="button">Ask a question <span>→</span></button>
           </article>
 
           <div class="legend" aria-label="Filter graph by node level">
@@ -76,13 +78,16 @@
         </div>
       </section>
 
-      <aside class="chat-panel" aria-label="Course AI assistant">
+      <aside id="chat-panel" class="chat-panel" aria-label="Course AI assistant" aria-hidden="true" hidden>
         <header class="chat-header">
           <div>
             <p class="eyebrow">COURSE AI</p>
             <h1>Learning Agent</h1>
           </div>
-          <div class="grounded-badge"><span></span>Course-grounded</div>
+          <div class="chat-header-actions">
+            <div class="grounded-badge"><span></span>Course-grounded</div>
+            <button id="close-chat" class="chat-close" type="button" aria-label="Close Learning Agent" title="Close Learning Agent">×</button>
+          </div>
         </header>
 
         <div id="context-bar" class="context-bar" hidden>
@@ -91,7 +96,7 @@
           <button id="explain-node" class="explain-node" type="button">Explain</button>
         </div>
 
-        <section id="messages" class="messages" aria-live="polite">
+        <section id="messages" class="messages" aria-label="Conversation" aria-live="polite" tabindex="0">
           <article class="message assistant">
             <div class="assistant-avatar" aria-hidden="true">N</div>
             <div>

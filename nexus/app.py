@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 
@@ -44,12 +46,28 @@ def default_model(provider: str) -> str | None:
     return None
 
 
+COURSE_SITE_BASE = "https://mle4217-5219.matsci.dev/"
+
+
+def course_source_url(file_path: str) -> str:
+    """Map a retrieved course file to its published MyST page."""
+    normalized = str(file_path or "").strip().replace("\\", "/")
+    normalized = re.sub(r"^(?:\./)+", "", normalized).lstrip("/")
+    normalized = re.sub(r"\.(?:md|ipynb|myst|rst)$", "", normalized, flags=re.IGNORECASE)
+    if normalized.lower() in {"index", "readme"}:
+        normalized = ""
+    elif normalized.lower().endswith(("/index", "/readme")):
+        normalized = normalized.rsplit("/", 1)[0]
+    encoded_path = "/".join(quote(part) for part in normalized.split("/") if part)
+    return COURSE_SITE_BASE if not encoded_path else f"{COURSE_SITE_BASE}{encoded_path}/"
+
+
 def create_app() -> Flask:
     load_env_file(REPO_ROOT / ".env")
     graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
     nodes_by_id = {node["id"]: node for node in graph["nodes"]}
     pipeline = QueryPipeline(top_k=5)
-    prompt_builder = PromptBuilder(evidence_score_threshold=0.60)
+    prompt_builder = PromptBuilder(evidence_score_threshold=0.60, presentation_mode="direct")
     app = Flask(__name__, static_folder=None)
 
     def selected_context(payload: dict) -> list[str]:
@@ -115,6 +133,14 @@ def create_app() -> Flask:
                     short_memory=memory,
                     selected_context=context,
                 ):
+                    if event.get("sources"):
+                        event = {
+                            **event,
+                            "sources": [
+                                {**source, "url": course_source_url(source.get("file_path", ""))}
+                                for source in event["sources"]
+                            ],
+                        }
                     yield json.dumps(event, ensure_ascii=False) + "\n"
             except Exception as exc:
                 yield json.dumps(

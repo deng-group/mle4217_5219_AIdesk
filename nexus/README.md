@@ -1,34 +1,66 @@
 # Nexus
 
-Nexus is the standalone graph-based course explorer for MLE4217/5219. It lives
-in this repository so it can reuse the existing RAG pipeline, but it does not
-depend on or modify the sibling Jupyter Book repository.
+Nexus is the standalone graph-based course explorer for MLE4217/5219. It
+reuses this repository's RAG pipeline while remaining independent from the
+Jupyter Book course website.
 
-The first implementation slice is the course knowledge graph in `graph/` and
-the generated frontend-ready artifact in `data/course_graph.json`.
+## Open the local test website
 
-## Graph model
+From the repository root, run:
 
-The graph has three node levels:
+```bash
+./scripts/start_nexus_test.sh
+```
 
-1. `chapter` — a course module such as Structures or High-Throughput Methods.
-2. `topic` — a section within a chapter, such as Materials Project or MACE.
-3. `keyword` — a global canonical concept shared by every chapter and topic.
+The launcher performs the complete local preflight:
 
-Because keyword nodes are global, topics in different chapters connect through
-the same concept instead of creating duplicate keyword nodes. The build also
-adds topic-to-topic, chapter-to-chapter, and keyword-to-keyword `related` edges.
-These relationships are deliberately undirected and do not assign a semantic
-predicate. Every generated relationship carries evidence IDs that point back
-to course chunks, plus a numerical strength that the interface can use for
-progressive disclosure.
+1. loads the ignored local configuration from `scripts/api_env.sh`;
+2. finds a Python environment with the RAG dependencies;
+3. makes a small real request to verify the API key, endpoint, and model;
+4. starts Nexus at `http://127.0.0.1:5057/`; and
+5. opens the test page in the default browser.
 
-The graph is intentionally based on a reviewed concept taxonomy rather than the
-raw automatically extracted `concepts` field. The raw field currently contains
-code fragments and formatting artifacts that are unsuitable for student-facing
-nodes.
+Keep the terminal open while testing. Press `Ctrl+C` to stop the local server.
+To start the server without opening a browser, use:
 
-## Rebuild and validate
+```bash
+./scripts/start_nexus_test.sh --no-browser
+```
+
+If `scripts/api_env.sh` does not exist, create it once:
+
+```bash
+cp scripts/api_env.example.sh scripts/api_env.sh
+```
+
+Then edit only the local `scripts/api_env.sh` and add the API token. The file is
+ignored by Git and must never be committed.
+
+To check the API without starting the website:
+
+```bash
+source scripts/api_env.sh
+python3 scripts/check_nexus_api.py
+```
+
+A successful check prints the provider and model but never prints the token.
+
+## Student-facing graph model
+
+The interface presents two node levels:
+
+1. `Chapter` — a primary course area such as Structures or Database.
+2. `Concept` — a student-facing idea, method, tool, or section-level subject.
+
+The source graph still retains `topic` and `keyword` provenance internally so
+retrieval and future concept curation remain possible. Both are displayed as
+Concept nodes in the interface.
+
+Connections are evidence-backed and semantically neutral. A connection means
+that two nodes are related in the supplied course materials; the RAG agent
+explains the relationship only when the retrieved evidence supports it.
+
+## Rebuild and validate the graph
 
 From the repository root:
 
@@ -40,9 +72,12 @@ python3 nexus/graph/validate_graph.py
 The builder is deterministic: the same course chunks and taxonomy produce the
 same node IDs, edges, and ordering.
 
-## Visibility
+## Important local files
 
-Primary course chapters are marked `visibility: primary`. Review material is
-kept as `secondary`, while repository metadata and figure-generation material
-are `hidden`. A future frontend should start with primary chapter nodes and
-expand topics and keywords on demand.
+- `nexus/app.py` — local Nexus server and RAG API.
+- `nexus/dist/` — browser interface.
+- `nexus/data/course_graph.json` — generated graph data.
+- `nexus/PROJECT_PLAN.md` — product plan, status, and TODO items.
+- `scripts/api_env.sh` — ignored local API configuration.
+- `scripts/check_nexus_api.py` — safe live API preflight.
+- `scripts/start_nexus_test.sh` — one-command local launcher.

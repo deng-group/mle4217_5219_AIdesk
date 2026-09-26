@@ -30,6 +30,17 @@ Prefer concise, instructional answers that help students understand the concept.
 """
 
 
+DIRECT_ANSWER_SYSTEM_INSTRUCTION = """You are the course helper for the MLE4217/5219 Materials Informatics course.
+Answer students using only the provided course evidence and optional short-memory context.
+If evidence is insufficient, ambiguous, outdated, or out of scope, say so clearly.
+Do not invent citations, facts, deadlines, course policies, or code behavior.
+Do not show raw internal chunk IDs to students.
+Answer the question directly. Do not begin with a sentence telling the student where the answer can be found, and do not include course file paths in the answer. The interface presents course sources separately.
+Use readable Markdown formatting. For procedural or workflow questions, use a concise numbered list. For conceptual questions, use short paragraphs or bullets when that improves readability.
+Prefer concise, instructional answers that help students understand the concept.
+"""
+
+
 STATUS_POLICIES = {
     "answerable": {
         "llm_action": "generate_answer",
@@ -54,6 +65,19 @@ STATUS_POLICIES = {
 }
 
 
+DIRECT_ANSWER_STATUS_POLICIES = {
+    **STATUS_POLICIES,
+    "answerable": {
+        "llm_action": "generate_answer",
+        "instruction": "Answer the question directly using only the provided evidence. Do not open with a source-location sentence, do not mention course file paths, and do not add a sources section because the interface presents sources separately. Use concise, readable Markdown. For procedural or workflow questions, use a numbered list. Do not use report-style headings or show raw chunk IDs.",
+    },
+    "needs_time_context": {
+        "llm_action": "generate_answer",
+        "instruction": "Answer the question directly using only the provided evidence and explicitly state the relevant academic year/semester. Do not open with a source-location sentence, do not mention course file paths, and do not add a sources section because the interface presents sources separately. Do not present offering-specific logistics as timeless. Use concise, readable Markdown and do not show raw chunk IDs.",
+    },
+}
+
+
 class PromptBuilder:
     """Construct structured prompt packages for future LLM calls."""
 
@@ -62,10 +86,14 @@ class PromptBuilder:
         max_evidence: int | None = None,
         max_memory_turns: int = 4,
         evidence_score_threshold: float = 0.60,
+        presentation_mode: str = "location_lead",
     ):
+        if presentation_mode not in {"location_lead", "direct"}:
+            raise ValueError("presentation_mode must be 'location_lead' or 'direct'")
         self.max_evidence = max_evidence
         self.max_memory_turns = max_memory_turns
         self.evidence_score_threshold = evidence_score_threshold
+        self.presentation_mode = presentation_mode
 
     def build(
         self,
@@ -74,12 +102,14 @@ class PromptBuilder:
         selected_context: list[str] | None = None,
     ) -> dict:
         status = pipeline_result["status"]
-        policy = STATUS_POLICIES.get(status, STATUS_POLICIES["weak_evidence"])
+        policies = DIRECT_ANSWER_STATUS_POLICIES if self.presentation_mode == "direct" else STATUS_POLICIES
+        policy = policies.get(status, policies["weak_evidence"])
+        system_instruction = DIRECT_ANSWER_SYSTEM_INSTRUCTION if self.presentation_mode == "direct" else SYSTEM_INSTRUCTION
         memory = self._trim_memory(short_memory or [])
         evidence = self._select_evidence(pipeline_result)
 
         prompt_sections = [
-            f"System instruction:\n{SYSTEM_INSTRUCTION.strip()}",
+            f"System instruction:\n{system_instruction.strip()}",
             f"Answerability status: {status}",
             f"Required action: {policy['llm_action']}",
             f"Policy:\n{policy['instruction']}",
@@ -111,7 +141,7 @@ class PromptBuilder:
             "llm_action": policy["llm_action"],
             "answer_policy": {
                 "use_only_evidence": policy["llm_action"] == "generate_answer",
-                "cite_sources": policy["llm_action"] == "generate_answer",
+                "cite_sources": policy["llm_action"] == "generate_answer" and self.presentation_mode == "location_lead",
                 "requires_temporal_context": pipeline_result.get("needs_temporal_context", False),
                 "temporal_context": pipeline_result.get("temporal_context"),
                 "evidence_score_threshold": self.evidence_score_threshold,
@@ -122,7 +152,7 @@ class PromptBuilder:
             "selected_context": context[:4],
             "evidence": evidence,
             "messages": [
-                {"role": "system", "content": SYSTEM_INSTRUCTION.strip()},
+                {"role": "system", "content": system_instruction.strip()},
                 {"role": "user", "content": "\n\n".join(prompt_sections[1:])},
             ],
             "final_prompt": "\n\n---\n\n".join(prompt_sections),

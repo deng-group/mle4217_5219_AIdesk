@@ -3,6 +3,7 @@ const MEMORY_KEY = "nexus_course_memory_v1";
 const MAX_MEMORY_ITEMS = 6;
 
 const elements = {
+  shell: document.querySelector(".app-shell"),
   svg: document.querySelector("#graph-svg"),
   viewport: document.querySelector("#graph-viewport"),
   edgeLayer: document.querySelector("#edge-layer"),
@@ -13,8 +14,9 @@ const elements = {
   nodeCard: document.querySelector("#node-card"),
   nodeKind: document.querySelector("#node-kind"),
   nodeTitle: document.querySelector("#node-title"),
-  nodeDescription: document.querySelector("#node-description"),
-  nodeMeta: document.querySelector("#node-meta"),
+  chatPanel: document.querySelector("#chat-panel"),
+  openChat: document.querySelector("#open-chat"),
+  closeChat: document.querySelector("#close-chat"),
   contextBar: document.querySelector("#context-bar"),
   contextChip: document.querySelector("#context-chip"),
   explainNode: document.querySelector("#explain-node"),
@@ -48,7 +50,23 @@ const state = {
   pointer: null,
   mode: "overview",
   activeExplanationController: null,
+  chatAutoFollow: true,
+  chatOpen: false,
 };
+
+function setChatOpen(open, options = {}) {
+  state.chatOpen = open;
+  elements.shell.classList.toggle("chat-is-open", open);
+  elements.chatPanel.hidden = !open;
+  elements.chatPanel.setAttribute("aria-hidden", String(!open));
+  elements.openChat.hidden = open;
+  elements.openChat.setAttribute("aria-expanded", String(open));
+  requestAnimationFrame(() => {
+    if (state.graph) fitGraph();
+    if (open && options.focusQuestion !== false) elements.question.focus();
+    if (!open && options.restoreFocus !== false) elements.openChat.focus();
+  });
+}
 
 function readMemory() {
   try {
@@ -550,22 +568,17 @@ elements.svg.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 function showNodeCard(node) {
-  const edgeCount = (state.edgesByNode.get(node.id) || []).filter((edge) => edge.type === "related").length;
-  const chunkCount = node.chunk_ids?.length || 0;
   const kind = visualType(node);
   elements.nodeKind.textContent = kind;
   elements.nodeKind.style.color = kind === "chapter" ? "var(--chapter)" : "var(--concept)";
-  elements.nodeTitle.textContent = node.label; elements.nodeDescription.textContent = node.description;
-  elements.nodeMeta.replaceChildren();
-  [`${edgeCount} connections`, `${chunkCount} course chunks`].forEach((text) => {
-    const span = document.createElement("span"); span.textContent = text; elements.nodeMeta.appendChild(span);
-  });
+  elements.nodeTitle.textContent = node.label;
   elements.nodeCard.hidden = false;
 }
 
 function updateContext() {
   const node = state.nodesById.get(state.selectedId);
   elements.contextBar.hidden = !node;
+  elements.question.placeholder = node ? `Ask about ${node.label}…` : "Ask about the course…";
   if (node) {
     elements.contextChip.querySelector("b").textContent = node.label;
     setExplainButtonBusy(false);
@@ -608,31 +621,122 @@ function showSearchResults(query) {
   elements.searchResults.hidden = false;
 }
 
+function appendInlineMarkdown(parent, text) {
+  const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|\*[^*\n]+\*|_[^_\n]+_)/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > cursor) parent.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+    const token = match[0];
+    if (token.startsWith("`")) {
+      const code = document.createElement("code"); code.textContent = token.slice(1, -1); parent.appendChild(code);
+    } else if (token.startsWith("**") || token.startsWith("__")) {
+      const strong = document.createElement("strong"); appendInlineMarkdown(strong, token.slice(2, -2)); parent.appendChild(strong);
+    } else if (token.startsWith("[")) {
+      const parts = token.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+      if (parts) {
+        const link = document.createElement("a"); link.href = parts[2]; link.target = "_blank"; link.rel = "noopener noreferrer";
+        appendInlineMarkdown(link, parts[1]); parent.appendChild(link);
+      } else {
+        parent.appendChild(document.createTextNode(token));
+      }
+    } else {
+      const emphasis = document.createElement("em"); appendInlineMarkdown(emphasis, token.slice(1, -1)); parent.appendChild(emphasis);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < text.length) parent.appendChild(document.createTextNode(text.slice(cursor)));
+}
+
+function isMarkdownBlockStart(line) {
+  return /^\s*(?:```|#{1,4}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/.test(line);
+}
+
+function renderMarkdown(container, markdown) {
+  const lines = String(markdown || "").replaceAll("\r\n", "\n").split("\n");
+  const fragment = document.createDocumentFragment();
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) { index += 1; continue; }
+
+    const fence = line.match(/^\s*```([^\s`]*)\s*$/);
+    if (fence) {
+      index += 1; const codeLines = [];
+      while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) { codeLines.push(lines[index]); index += 1; }
+      if (index < lines.length) index += 1;
+      const pre = document.createElement("pre"); const code = document.createElement("code");
+      if (fence[1]) code.className = `language-${fence[1].replace(/[^a-z0-9_-]/gi, "")}`;
+      code.textContent = codeLines.join("\n"); pre.appendChild(code); fragment.appendChild(pre); continue;
+    }
+
+    const heading = line.match(/^\s*(#{1,4})\s+(.+)$/);
+    if (heading) {
+      const element = document.createElement(`h${Math.min(heading[1].length + 1, 5)}`);
+      appendInlineMarkdown(element, heading[2].trim()); fragment.appendChild(element); index += 1; continue;
+    }
+
+    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+    const ordered = line.match(/^\s*(\d+)[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      const list = document.createElement(unordered ? "ul" : "ol");
+      if (ordered) list.start = Number(ordered[1]);
+      const itemPattern = unordered ? /^\s*[-*+]\s+(.+)$/ : /^\s*(\d+)[.)]\s+(.+)$/;
+      while (index < lines.length) {
+        const itemMatch = lines[index].match(itemPattern); if (!itemMatch) break;
+        const itemText = unordered ? itemMatch[1] : itemMatch[2];
+        const item = document.createElement("li"); appendInlineMarkdown(item, itemText.trim()); list.appendChild(item); index += 1;
+      }
+      fragment.appendChild(list); continue;
+    }
+
+    if (/^\s*>/.test(line)) {
+      const quote = document.createElement("blockquote"); const quoteLines = [];
+      while (index < lines.length && /^\s*>/.test(lines[index])) { quoteLines.push(lines[index].replace(/^\s*>\s?/, "")); index += 1; }
+      appendInlineMarkdown(quote, quoteLines.join(" ")); fragment.appendChild(quote); continue;
+    }
+
+    const paragraphLines = [line.trim()]; index += 1;
+    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines[index])) {
+      paragraphLines.push(lines[index].trim()); index += 1;
+    }
+    const paragraph = document.createElement("p"); appendInlineMarkdown(paragraph, paragraphLines.join(" ")); fragment.appendChild(paragraph);
+  }
+  container.replaceChildren(fragment);
+}
+
 function addUserMessage(text) {
   const article = document.createElement("article"); article.className = "message user";
   const bubble = document.createElement("div"); const paragraph = document.createElement("p");
   paragraph.textContent = text; bubble.appendChild(paragraph); article.appendChild(bubble); elements.messages.appendChild(article);
-  elements.messages.scrollTop = elements.messages.scrollHeight;
+  state.chatAutoFollow = true;
+  scrollMessagesToBottom(true);
 }
 
 function addAssistantMessage(options = {}) {
   const article = document.createElement("article"); article.className = `message assistant${options.className ? ` ${options.className}` : ""}`;
   const avatar = document.createElement("div"); avatar.className = "assistant-avatar"; avatar.textContent = "N";
-  const content = document.createElement("div"); const paragraph = document.createElement("p");
+  const content = document.createElement("div"); const body = document.createElement("div"); body.className = "message-body";
   if (options.heading) {
     const heading = document.createElement("strong"); heading.className = "message-heading"; heading.textContent = options.heading;
     content.appendChild(heading);
   }
   const thinking = document.createElement("span"); thinking.className = "thinking"; thinking.innerHTML = "<i></i><i></i><i></i>";
-  paragraph.appendChild(thinking); content.appendChild(paragraph); article.append(avatar, content); elements.messages.appendChild(article);
+  body.appendChild(thinking); content.appendChild(body); article.append(avatar, content); elements.messages.appendChild(article);
+  state.chatAutoFollow = true;
+  scrollMessagesToBottom(true);
+  return { article, body, content };
+}
+
+function scrollMessagesToBottom(force = false) {
+  if (!force && !state.chatAutoFollow) return;
   elements.messages.scrollTop = elements.messages.scrollHeight;
-  return { article, paragraph, content };
 }
 
 function setSources(sources = []) {
   elements.sourceList.replaceChildren(); elements.sourceCount.textContent = String(sources.length); elements.sourceDrawer.hidden = !sources.length;
   for (const source of sources) {
-    const item = document.createElement("div"); item.className = "source-item";
+    const item = document.createElement("a"); item.className = "source-item";
+    item.href = source.url || "https://mle4217-5219.matsci.dev/"; item.target = "_blank"; item.rel = "noopener noreferrer";
     const title = document.createElement("strong"); title.textContent = source.title || "Course material";
     const path = document.createElement("small"); path.textContent = source.file_path || "";
     item.append(title, path); elements.sourceList.appendChild(item);
@@ -640,6 +744,7 @@ function setSources(sources = []) {
 }
 
 async function streamQuestion(query, assistant, options = {}) {
+  elements.suggestions.hidden = true;
   const response = await fetch("/api/answer/stream", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, context_node_ids: state.selectedId ? [state.selectedId] : [], short_memory: readMemory() }),
@@ -647,7 +752,7 @@ async function streamQuestion(query, assistant, options = {}) {
   });
   if (!response.ok || !response.body) throw new Error("The course assistant is not available right now.");
   const reader = response.body.getReader(); const decoder = new TextDecoder();
-  let buffer = ""; let answer = ""; let resultStatus = "";
+  let buffer = ""; let answer = "";
   while (true) {
     const { value, done } = await reader.read();
     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
@@ -656,16 +761,14 @@ async function streamQuestion(query, assistant, options = {}) {
       if (!line.trim()) continue;
       const event = JSON.parse(line);
       if (event.type === "error") throw new Error(event.message || "The course assistant could not answer.");
-      if (event.type === "start") { resultStatus = event.status || ""; setSources(event.sources || []); }
-      if (event.type === "delta") { answer += event.text || ""; assistant.paragraph.textContent = answer; elements.messages.scrollTop = elements.messages.scrollHeight; }
-      if (event.type === "done") { answer = event.answer || answer; resultStatus = event.status || resultStatus; assistant.paragraph.textContent = answer; setSources(event.sources || []); }
+      if (event.type === "start") setSources(event.sources || []);
+      if (event.type === "delta") { answer += event.text || ""; renderMarkdown(assistant.body, answer); scrollMessagesToBottom(); }
+      if (event.type === "done") { answer = event.answer || answer; renderMarkdown(assistant.body, answer); setSources(event.sources || []); }
     }
     if (done) break;
   }
   if (!answer) throw new Error("The course assistant returned an empty response.");
-  const meta = document.createElement("small");
-  meta.textContent = resultStatus === "answerable" ? "Grounded in course materials" : `Course evidence check: ${resultStatus.replaceAll("_", " ")}`;
-  assistant.content.appendChild(meta); return answer;
+  return answer;
 }
 
 async function explainSelectedNode(node) {
@@ -687,13 +790,13 @@ async function explainSelectedNode(node) {
       return;
     }
     assistant.article.classList.add("error");
-    assistant.paragraph.textContent = error.message;
+    assistant.body.textContent = error.message;
   } finally {
     if (state.activeExplanationController === controller) {
       state.activeExplanationController = null;
       setExplainButtonBusy(false);
     }
-    elements.messages.scrollTop = elements.messages.scrollHeight;
+    scrollMessagesToBottom();
   }
 }
 
@@ -706,9 +809,9 @@ async function submitQuestion(query) {
     const answer = await streamQuestion(text, assistant);
     const memory = readMemory(); memory.push({ role: "user", content: text }, { role: "assistant", content: answer }); writeMemory(memory);
   } catch (error) {
-    assistant.article.classList.add("error"); assistant.paragraph.textContent = error.message;
+    assistant.article.classList.add("error"); assistant.body.textContent = error.message;
   } finally {
-    elements.send.disabled = false; elements.question.focus(); elements.messages.scrollTop = elements.messages.scrollHeight;
+    elements.send.disabled = false; elements.question.focus(); scrollMessagesToBottom();
   }
 }
 
@@ -733,7 +836,8 @@ elements.search.addEventListener("keydown", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); elements.search.focus(); }
-  if (event.key === "Escape" && !elements.nodeCard.hidden) elements.nodeCard.hidden = true;
+  if (event.key === "Escape" && state.chatOpen) setChatOpen(false);
+  else if (event.key === "Escape" && !elements.nodeCard.hidden) elements.nodeCard.hidden = true;
 });
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".search-box") && !event.target.closest(".search-results")) elements.searchResults.hidden = true;
@@ -749,8 +853,13 @@ elements.explainNode.addEventListener("click", () => {
 document.querySelector("#close-node-card").addEventListener("click", () => { elements.nodeCard.hidden = true; });
 document.querySelector("#ask-node").addEventListener("click", () => {
   const node = state.nodesById.get(state.selectedId); if (!node) return;
-  elements.question.value = `Explain ${node.label} using the course materials.`; resizeQuestion(); elements.question.focus();
+  elements.question.value = "";
+  elements.question.placeholder = `Ask about ${node.label}…`;
+  resizeQuestion();
+  setChatOpen(true);
 });
+elements.openChat.addEventListener("click", () => setChatOpen(true));
+elements.closeChat.addEventListener("click", () => setChatOpen(false));
 elements.contextChip.addEventListener("click", () => setViewMode(state.mode));
 elements.sourceToggle.addEventListener("click", () => {
   const open = elements.sourceToggle.getAttribute("aria-expanded") === "true";
@@ -758,6 +867,10 @@ elements.sourceToggle.addEventListener("click", () => {
 });
 elements.form.addEventListener("submit", (event) => { event.preventDefault(); submitQuestion(elements.question.value); });
 elements.question.addEventListener("input", resizeQuestion);
+elements.messages.addEventListener("scroll", () => {
+  const distanceFromBottom = elements.messages.scrollHeight - elements.messages.scrollTop - elements.messages.clientHeight;
+  state.chatAutoFollow = distanceFromBottom < 72;
+});
 elements.question.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); elements.form.requestSubmit(); }
 });
